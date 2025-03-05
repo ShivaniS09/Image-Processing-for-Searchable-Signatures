@@ -1,0 +1,126 @@
+import os
+import pickle
+import faiss
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications.resnet50 import preprocess_input, ResNet50
+from tensorflow.keras.layers import GlobalMaxPooling2D
+
+# ✅ Paths
+models_dir = "C:/Users/User/PycharmProjects/shivani_help/models/"
+index_path = os.path.join(models_dir, "faiss_index.bin")
+features_path = os.path.join(models_dir, "image_features.pkl")
+filenames_path = os.path.join(models_dir, "filenames.pkl")
+feedback_path = os.path.join(models_dir, "user_feedback.pkl")
+
+# ✅ Load FAISS index & filenames
+print("🔄 Loading FAISS index and image metadata...")
+index = faiss.read_index(index_path)
+
+with open(filenames_path, "rb") as f:
+    filenames = pickle.load(f)
+
+with open(features_path, "rb") as f:
+    image_features = np.array(pickle.load(f))
+
+# ✅ Load RL Feedback Tracking
+if os.path.exists(feedback_path):
+    with open(feedback_path, "rb") as f:
+        user_feedback = pickle.load(f)
+else:
+    user_feedback = {img: 0 for img in filenames}  # Default feedback = 0
+
+print("\n✅ FAISS Index Loaded & RL Feedback Initialized!")
+
+# -------------------------------------
+# 🚀 STEP 1: MODIFY EMBEDDINGS FOR QUERY IMAGES
+# -------------------------------------
+
+# ✅ Select the first 3 images from FAISS as test queries
+test_images = filenames[:3]  # Only using first 3 images as test images
+
+print("\n🔍 **Original Embeddings of Query Images (Before Modification):**")
+for i, img in enumerate(test_images):
+    embedding_idx = filenames.index(img)
+    print(f"{i+1}. {os.path.basename(img)} | Embedding: {image_features[embedding_idx][:5]}...")  # Show first 5 values
+
+# ✅ Modify embeddings slightly to test impact
+for i, img in enumerate(test_images):
+    embedding_idx = filenames.index(img)
+    image_features[embedding_idx] += np.random.uniform(-0.1, 0.1, image_features.shape[1])  # Apply small random shift
+    image_features[embedding_idx] /= np.linalg.norm(image_features[embedding_idx])  # Re-normalize
+
+print("\n🔍 **Modified Embeddings of Query Images:**")
+for i, img in enumerate(test_images):
+    embedding_idx = filenames.index(img)
+    print(f"{i+1}. {os.path.basename(img)} | New Embedding: {image_features[embedding_idx][:5]}...")  # Show first 5 values
+
+# ✅ Update FAISS index with modified embeddings
+index = faiss.IndexFlatL2(image_features.shape[1])  # Reinitialize FAISS index
+index.add(image_features)
+
+print("\n✅ FAISS Index Updated with Modified Query Embeddings!")
+
+# -------------------------------------
+# 🚀 STEP 2: RECOMMENDATION SYSTEM WITH RL FEEDBACK
+# -------------------------------------
+
+# ✅ Load ResNet50 Model
+model = tf.keras.models.Sequential([
+    ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3)),
+    GlobalMaxPooling2D()
+])
+
+# ✅ Function to apply RL feedback
+def apply_feedback(retrieved_images, scenario_rewards):
+    print("\n🔄 **Applying RL Feedback Adjustments:**")
+    for img, reward in zip(retrieved_images, scenario_rewards):
+        user_feedback[img] += reward
+        print(f" - Image: {img} | Feedback: {'✅ +1' if reward > 0 else '❌ -1'} | Updated Score: {user_feedback[img]}")
+
+    with open(feedback_path, "wb") as f:
+        pickle.dump(user_feedback, f)
+
+    return sorted(retrieved_images, key=lambda img: user_feedback.get(img, 0), reverse=True)
+
+# ✅ Function to find similar images with FAISS & RL
+def find_similar_images(query_image, scenario_rewards, feedback_note=""):
+    print(f"\n🔍 **Query Image:** {os.path.basename(query_image)}")
+    print(f"📌 **Feedback Scenario Note:** {feedback_note}")
+
+    embedding_idx = filenames.index(query_image)
+    query_features = image_features[embedding_idx].reshape(1, -1)  # Use modified embedding for search
+    _, indices = index.search(query_features, 5)  # Get top 5 similar images
+    retrieved_images = [filenames[i] for i in indices[0]]
+
+    print("\n🔍 **Initial FAISS Recommendations:**")
+    for img in retrieved_images:
+        print(f" - {img}")
+
+    # ✅ Apply RL-Based Ranking Adjustments
+    adjusted_images = apply_feedback(retrieved_images, scenario_rewards)
+
+    print("\n✅ **Final Adjusted Recommendations:**")
+    for img in adjusted_images:
+        print(f" - {img}")
+
+    return adjusted_images
+
+# -------------------------------------
+# 🚀 STEP 3: TEST RL FEEDBACK WITH HARDCODED NOTES (ENSURING ONLY 3 SEARCHES)
+# -------------------------------------
+
+# ✅ Define **EXACT** mapping between query images and scenarios
+scenario_mappings = {
+    test_images[0]: ([1, -1, -1], "look at pictures manually do."),
+    test_images[1]: ([-1, 1, -1], "look at pictures manually do."),
+    test_images[2]: ([-1, -1, 1], "look at pictures manually do.")
+}
+
+# ✅ Run RL-Based Recommendation for Each Image **ONCE**
+for query_image, (scenario_rewards, note) in scenario_mappings.items():
+    print(f"\n🔹 **Running Scenario for Query: {os.path.basename(query_image)}**")
+    find_similar_images(query_image, scenario_rewards, feedback_note=note)
+
+print("\n✅ **All RL-Based Recommendation Scenarios Completed Successfully!**")

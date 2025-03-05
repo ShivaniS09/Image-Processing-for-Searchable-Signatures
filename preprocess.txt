@@ -1,0 +1,14 @@
+import os
+import pandas as pd
+import ast
+
+# ✅ Load dataset
+data_dir = "../data/"
+df = pd.read_csv(os.path.join(data_dir, "meta_Electronics.csv"))[:100]
+df = df.dropna(subset=["main_cat", "title", "imageURLHighRes"])
+df["imageURLHighRes"] = df["imageURLHighRes"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else [])
+df.to_csv(os.path.join(data_dir, "Project_Dataset.csv"), index=False)
+
+print("✅ Preprocessing Complete!")
+
+df = pd.read_csv("your_fashion_dataset_path.csv")

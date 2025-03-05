@@ -1,0 +1,34 @@
+import os
+import pickle
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.applications.resnet50 import ResNet50, preprocess_input
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.layers import GlobalMaxPooling2D
+
+# ✅ Load ResNet50 model
+model = ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+model.trainable = False
+model = tf.keras.models.Sequential([model, GlobalMaxPooling2D()])
+
+# ✅ Extract embeddings
+data_dir = "../data/rl_images/"
+image_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith(".jpg")]
+image_features = []
+
+for img_path in image_files:
+    img = image.load_img(img_path, target_size=(224, 224))
+    img_array = np.expand_dims(image.img_to_array(img), axis=0)
+    img_array = preprocess_input(img_array)
+    features = model.predict(img_array).flatten()
+    image_features.append(features / np.linalg.norm(features))
+
+# ✅ Save extracted features
+models_dir = "../models/"
+os.makedirs(models_dir, exist_ok=True)
+with open(os.path.join(models_dir, "image_features.pkl"), "wb") as f:
+    pickle.dump(image_features, f)
+with open(os.path.join(models_dir, "filenames.pkl"), "wb") as f:
+    pickle.dump(image_files, f)
+
+print("✅ Feature Extraction Complete!")

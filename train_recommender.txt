@@ -1,0 +1,28 @@
+import os
+import pickle
+import faiss
+import numpy as np
+
+# ✅ Load extracted features
+models_dir = "../models/"
+with open(os.path.join(models_dir, "image_features.pkl"), "rb") as f:
+    image_features = np.array(pickle.load(f))
+with open(os.path.join(models_dir, "filenames.pkl"), "rb") as f:
+    filenames = pickle.load(f)
+
+# ✅ Create FAISS index
+index = faiss.IndexFlatL2(image_features.shape[1])
+index.add(image_features)
+faiss.write_index(index, os.path.join(models_dir, "faiss_index.bin"))
+
+# ✅ Initialize RL feedback tracking
+feedback_path = os.path.join(models_dir, "user_feedback.pkl")
+if os.path.exists(feedback_path):
+    with open(feedback_path, "rb") as f:
+        user_feedback = pickle.load(f)
+else:
+    user_feedback = {img: 0 for img in filenames}
+    with open(feedback_path, "wb") as f:
+        pickle.dump(user_feedback, f)
+
+print("✅ FAISS Index Built & RL Feedback Initialized!")
