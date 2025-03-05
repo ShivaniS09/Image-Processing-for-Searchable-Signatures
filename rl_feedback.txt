@@ -1,0 +1,17 @@
+import pickle
+import os
+
+models_dir = "../models/"
+feedback_path = os.path.join(models_dir, "user_feedback.pkl")
+
+# ✅ Load feedback data
+with open(feedback_path, "rb") as f:
+    user_feedback = pickle.load(f)
+
+# ✅ Function to apply RL feedback
+def apply_feedback(retrieved_images, scenario_rewards):
+    for img, reward in zip(retrieved_images, scenario_rewards):
+        user_feedback[img] += reward
+    with open(feedback_path, "wb") as f:
+        pickle.dump(user_feedback, f)
+    return sorted(retrieved_images, key=lambda img: user_feedback.get(img, 0), reverse=True)

@@ -11,4 +11,3 @@ df.to_csv(os.path.join(data_dir, "Project_Dataset.csv"), index=False)
 
 print("✅ Preprocessing Complete!")
 
-df = pd.read_csv("your_fashion_dataset_path.csv")
